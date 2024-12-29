@@ -9,7 +9,7 @@ import java.util.Set;
 import java.util.function.Predicate;
 
 public class CopyDefaultsHandler {
-    public static final String DEFAULTS_DIRECTORY = ConfiguredDefaults.MOD_ID;
+    public static final String DEFAULTS_DIRECTORY = "config/" + ConfiguredDefaults.MOD_ID;
     public static final String README_FILE = "README.md";
     private static final String README_CONTENTS = """
             # %1$s
@@ -20,8 +20,8 @@ public class CopyDefaultsHandler {
             Please note that due to the way Minecraft handles `options.txt` specifically it is sufficient to include only the options you want to set a preset for. All missing options will be filled in using their internal defaults when the file is read by the game.
             
             Examples:
-            - `.minecraft/%2$s/options.txt` will be copied to `.minecraft/options.txt` if not already present
-            - `.minecraft/%2$s/config/jei/jei.toml` will be copied to `.minecraft/config/jei/jei.toml` if not already present
+            - `.minecraft/config/%2$s/options.txt` will be copied to `.minecraft/options.txt` if not already present
+            - `.minecraft/config/%2$s/config/jei/jei.toml` will be copied to `.minecraft/config/jei/jei.toml` if not already present
             
             Note that this `README.md` file is excluded from being copied to `.minecraft`.
             """.formatted(ConfiguredDefaults.MOD_NAME, ConfiguredDefaults.MOD_ID);
