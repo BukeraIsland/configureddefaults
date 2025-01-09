@@ -1,11 +1,11 @@
 package fuzs.configureddefaults.handler;
 
-import com.google.common.base.Charsets;
-import com.google.common.base.Splitter;
-import com.google.common.collect.ImmutableSet;
 import fuzs.configureddefaults.ConfiguredDefaults;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -29,7 +29,6 @@ public class CopyDefaultsHandler {
                                                   Note that this `README.md` file is excluded from being copied to `.minecraft`.
                                                   """.formatted(ConfiguredDefaults.MOD_NAME, DEFAULTS_DIRECTORY);
     private static final String OPTIONS_FILE = "options.txt";
-    private static final Splitter OPTION_SPLITTER = Splitter.on(':').limit(2);
 
     private static boolean initialized;
 
@@ -61,14 +60,14 @@ public class CopyDefaultsHandler {
                         relativizeAndNormalize(gameParentPath, defaultPresetsPath));
                 return;
             } else {
-                ConfiguredDefaults.LOGGER.info("Successfully created fresh '{}' directory",
+                ConfiguredDefaults.LOGGER.info("Created fresh '{}' directory",
                         relativizeAndNormalize(gameParentPath, defaultPresetsPath));
             }
         }
         Path readmePath = defaultPresetsPath.resolve(README_FILE);
         if (Files.notExists(readmePath)) {
             Files.write(readmePath, README_CONTENTS.getBytes());
-            ConfiguredDefaults.LOGGER.info("Successfully created fresh '{}' file",
+            ConfiguredDefaults.LOGGER.info("Created fresh '{}' file",
                     relativizeAndNormalize(gameParentPath, readmePath));
         }
     }
@@ -86,7 +85,7 @@ public class CopyDefaultsHandler {
                         try {
                             // we do not need to handle creating parent directories as the file tree is traversed depth-first
                             Files.copy(sourcePath, targetPath);
-                            ConfiguredDefaults.LOGGER.info("Successfully copied '{}' to '{}'",
+                            ConfiguredDefaults.LOGGER.info("Copied '{}' to '{}'",
                                     relativizeAndNormalize(gameParentPath, sourcePath),
                                     relativizeAndNormalize(gameParentPath, targetPath));
                         } catch (IOException e) {
@@ -96,7 +95,9 @@ public class CopyDefaultsHandler {
                         }
                     }
                 } catch (Throwable throwable) {
-                    ConfiguredDefaults.LOGGER.error("Oh no!", throwable);
+                    ConfiguredDefaults.LOGGER.error("Failed to copy '{}'",
+                            relativizeAndNormalize(gameParentPath, sourcePath),
+                            throwable);
                 }
             }
         });
@@ -107,7 +108,7 @@ public class CopyDefaultsHandler {
                 defaultPresetsPath.resolve(README_FILE),
                 defaultPresetsPath.resolve(".DS_Store")));
         if (mergeOptions) paths.add(defaultPresetsPath.resolve(OPTIONS_FILE));
-        return ImmutableSet.copyOf(paths);
+        return paths;
     }
 
     private static Path relativizeAndNormalize(Path parentPath, Path path) {
@@ -116,24 +117,26 @@ public class CopyDefaultsHandler {
 
     private static void mergeOptions(Path path) {
         Map<String, String> options = new LinkedHashMap<>();
-        File file = path.resolve(OPTIONS_FILE).toFile();
-        loadOptions(file, options);
+        Path optionsPath = path.resolve(OPTIONS_FILE);
+        loadOptions(optionsPath, options, false);
         int size = options.size();
         // compare size as we only allow adding new options via Map::putIfAbsent,
         // so only if the size value changes we must rewrite the file
-        if (loadOptions(path.resolve(DEFAULTS_DIRECTORY).resolve(OPTIONS_FILE).toFile(), options) &&
+        if (loadOptions(path.resolve(DEFAULTS_DIRECTORY).resolve(OPTIONS_FILE), options, true) &&
                 options.size() != size) {
-            saveOptions(file, options);
+            saveOptions(optionsPath, options);
         }
     }
 
-    private static boolean loadOptions(File file, Map<String, String> options) {
-        if (file.exists()) {
-            try (BufferedReader bufferedReader = com.google.common.io.Files.newReader(file, Charsets.UTF_8)) {
+    private static boolean loadOptions(Path path, Map<String, String> options, boolean reportOption) {
+        if (Files.exists(path)) {
+            try (BufferedReader bufferedReader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
                 bufferedReader.lines().forEach((String string) -> {
                     try {
-                        Iterator<String> iterator = OPTION_SPLITTER.split(string).iterator();
-                        options.putIfAbsent(iterator.next(), iterator.next());
+                        Iterator<String> iterator = Arrays.asList(string.split(":", 2)).iterator();
+                        if (options.putIfAbsent(iterator.next(), iterator.next()) == null && reportOption) {
+                            ConfiguredDefaults.LOGGER.info("Setting new option: {}", string);
+                        }
                     } catch (Exception exception) {
                         ConfiguredDefaults.LOGGER.warn("Skipping bad option: {}", string);
                     }
@@ -148,9 +151,9 @@ public class CopyDefaultsHandler {
         return false;
     }
 
-    private static void saveOptions(File file, Map<String, String> options) {
+    private static void saveOptions(Path path, Map<String, String> options) {
         if (!options.isEmpty()) {
-            try (PrintWriter printWriter = new PrintWriter(new OutputStreamWriter(new FileOutputStream(file),
+            try (PrintWriter printWriter = new PrintWriter(new OutputStreamWriter(Files.newOutputStream(path),
                     StandardCharsets.UTF_8))) {
                 for (Map.Entry<String, String> entry : options.entrySet()) {
                     printWriter.print(entry.getKey());
